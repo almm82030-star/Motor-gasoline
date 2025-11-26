@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>نظام إدارة المركبات - السعودية</title>
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <!-- Google Maps API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY"></script>
+    <style>
+        body { font-family: Arial; margin: 20px; background: #f9f9f9; }
+        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #4CAF50; color: white; }
+        tr:hover { background-color: #f1f1f1; }
+        select, button, input[type="file"], input { margin: 5px; padding: 5px; }
+    </style>
+</head>
+<body>
+<h2>نظام إدارة المركبات - السعودية</h2>
+
+<button id="addVehicleBtn">إضافة مركبة جديدة</button>
+
+<table id="dataTable">
+    <thead>
+        <tr>
+            <th>الكود</th>
+            <th>الفرع</th>
+            <th>المركبة</th>
+            <th>نوع المركبة</th>
+            <th>السائق</th>
+            <th>عدد اللترات</th>
+            <th>التكلفة</th>
+            <th>قيمة الكيلومترات</th>
+            <th>نوع الوقود</th>
+            <th>رقم الهيكل</th>
+            <th>رقم المركبة الداخلي</th>
+            <th>المدينة الوجهة</th>
+            <th>المنطقة الوجهة</th>
+            <th>الحي الوجهة</th>
+            <th>المسافة (كم)</th>
+            <th>استهلاك الوقود</th>
+            <th>إجراء</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+const firebaseConfig = {
+    apiKey: "AIzaSyCWQ2q1HU_LLQKkp2KRlOZ1FdF0bI6jBbM",
+    authDomain: "zahrani-bc3ae.firebaseapp.com",
+    projectId: "zahrani-bc3ae",
+    storageBucket: "zahrani-bc3ae.firebasestorage.app",
+    messagingSenderId: "405206070457",
+    appId: "1:405206070457:web:fedf4204571d910030d768"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+const saudiLocations = {
+    "الرياض": {"الملز": ["حي الملز 1","حي الملز 2"], "السلام": ["حي السلام 1","حي السلام 2"]},
+    "جدة": {"الحمراء": ["حي الحمراء 1","حي الحمراء 2"], "السلامة": ["حي السلامة 1","حي السلامة 2"]},
+    "الدمام": {"النخيل": ["حي النخيل 1","حي النخيل 2"], "الأمير فهد": ["حي الأمير فهد 1","حي الأمير فهد 2"]}
+};
+
+const tableBody = document.querySelector('#dataTable tbody');
+const addVehicleBtn = document.getElementById('addVehicleBtn');
+
+function createRow(vehicle={}){
+    const tr=document.createElement('tr');
+    const fields=["code","branch","vehicle","type","driver","liters","cost","kmValue","fuelType","chassisNo","internalNo"];
+    fields.forEach(key=>{
+        const td=document.createElement('td');
+        td.contentEditable=true;
+        td.innerText=vehicle[key]||'';
+        td.addEventListener('input',saveToFirebase);
+        tr.appendChild(td);
+    });
+
+    // Dropdowns الوجهة
+    const cityTd=document.createElement('td');
+    const citySelect=document.createElement('select');
+    citySelect.innerHTML='<option value="">اختر المدينة</option>';
+    Object.keys(saudiLocations).forEach(city=>{const opt=document.createElement('option'); opt.value=city; opt.textContent=city; citySelect.appendChild(opt);});
+    citySelect.value=vehicle.city||'';
+    cityTd.appendChild(citySelect); tr.appendChild(cityTd);
+
+    const areaTd=document.createElement('td');
+    const areaSelect=document.createElement('select'); areaSelect.innerHTML='<option value="">اختر المنطقة</option>'; areaSelect.value=vehicle.area||''; areaTd.appendChild(areaSelect); tr.appendChild(areaTd);
+
+    const districtTd=document.createElement('td');
+    const districtSelect=document.createElement('select'); districtSelect.innerHTML='<option value="">اختر الحي</option>'; districtSelect.value=vehicle.district||''; districtTd.appendChild(districtSelect); tr.appendChild(districtTd);
+
+    // تحديث المناطق والأحياء عند اختيار المدينة
+    citySelect.addEventListener('change',()=>{
+        areaSelect.innerHTML='<option value="">اختر المنطقة</option>'; districtSelect.innerHTML='<option value="">اختر الحي</option>';
+        const city=citySelect.value;
+        if(city) Object.keys(saudiLocations[city]).forEach(area=>{const opt=document.createElement('option'); opt.value=area; opt.textContent=area; areaSelect.appendChild(opt);});
+        calculateDistanceForRow(tr);
+    });
+    areaSelect.addEventListener('change',()=>{
+        districtSelect.innerHTML='<option value="">اختر الحي</option>';
+        const city=citySelect.value; const area=areaSelect.value;
+        if(city && area) saudiLocations[city][area].forEach(district=>{const opt=document.createElement('option'); opt.value=district; opt.textContent=district; districtSelect.appendChild(opt);});
+        calculateDistanceForRow(tr);
+    });
+    districtSelect.addEventListener('change',()=>{calculateDistanceForRow(tr);});
+
+    // المسافة واستهلاك الوقود
+    const distanceTd=document.createElement('td'); distanceTd.innerText=vehicle.distance||''; tr.appendChild(distanceTd);
+    const consumptionTd=document.createElement('td'); consumptionTd.innerText=vehicle.consumption||''; tr.appendChild(consumptionTd);
+
+    // زر الحذف
+    const actionTd=document.createElement('td');
+    const delBtn=document.createElement('button'); delBtn.innerText='حذف'; delBtn.addEventListener('click',()=>{tr.remove(); saveToFirebase();}); actionTd.appendChild(delBtn); tr.appendChild(actionTd);
+
+    tableBody.appendChild(tr);
+    calculateDistanceForRow(tr);
+}
+
+// زر إضافة مركبة جديدة
+addVehicleBtn.addEventListener('click',()=>{createRow();});
+
+function calculateDistanceForRow(tr){
+    const cells=tr.querySelectorAll('td');
+    const origin=cells[1].innerText;
+    const city=cells[11].querySelector('select').value;
+    const area=cells[12].querySelector('select').value;
+    const district=cells[13].querySelector('select').value;
+    const destination=[city,area,district].filter(x=>x).join(', ');
+    if(!origin || !destination) return;
+    const service=new google.maps.DistanceMatrixService();
+    service.getDistanceMatrix({
+        origins:[origin],
+        destinations:[destination],
+        travelMode:'DRIVING'
+    },(response,status)=>{
+        if(status==='OK'){
+            const distance=response.rows[0].elements[0].distance.value/1000;
+            cells[14].innerText=distance.toFixed(2);
+            const liters=parseFloat(cells[5].innerText.replace(',','.'))||0;
+            if(distance>0 && liters>0) cells[15].innerText=(liters/distance*100).toFixed(2)+' لتر/100كم';
+            saveToFirebase();
+        }
+    });
+}
+
+function saveToFirebase(){
+    const rows=tableBody.querySelectorAll('tr'); const data=[];
+    rows.forEach(tr=>{
+        const cells=tr.querySelectorAll('td');
+        data.push({
+            code: cells[0].innerText,
+            branch: cells[1].innerText,
+            vehicle: cells[2].innerText,
+            type: cells[3].innerText,
+            driver: cells[4].innerText,
+            liters: cells[5].innerText,
+            cost: cells[6].innerText,
+            kmValue: cells[7].innerText,
+            fuelType: cells[8].innerText,
+            chassisNo: cells[9].innerText,
+            internalNo: cells[10].innerText,
+            city: cells[11].querySelector('select').value,
+            area: cells[12].querySelector('select').value,
+            district: cells[13].querySelector('select').value,
+            distance: cells[14].innerText,
+            consumption: cells[15].innerText
+        });
+    });
+    db.ref('vehicles').set(data);
+}
+
+// جلب البيانات من Firebase عند التحميل
+db.ref('vehicles').on('value', snapshot => {
+    const data=snapshot.val();
+    tableBody.innerHTML='';
+    if(data) data.forEach(vehicle=>{createRow(vehicle);});
+});
+</script>
+</body>
+</html>
