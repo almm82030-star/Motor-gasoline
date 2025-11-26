@@ -1,184 +1,190 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-    <meta charset="UTF-8">
-    <title>نظام إدارة المركبات - السعودية</title>
-    <!-- Firebase -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
-    <!-- Google Maps API -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY"></script>
-    <style>
-        body { font-family: Arial; margin: 20px; background: #f9f9f9; }
-        table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
-        th { background-color: #4CAF50; color: white; }
-        tr:hover { background-color: #f1f1f1; }
-        select, button, input[type="file"], input { margin: 5px; padding: 5px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام استهلاك الوقود - المملكة العربية السعودية</title>
+<style>
+    body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #f4f4f4;
+    }
+    header {
+        background-color: #ffffff;
+        color: #004aad;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    header img {
+        height: 100px;
+        margin-bottom: 10px;
+    }
+    .container {
+        max-width: 1200px;
+        margin: 20px auto;
+        padding: 20px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    }
+    label {
+        display: block;
+        margin-top: 15px;
+        font-weight: bold;
+    }
+    select, input[type=number], button {
+        width: 100%;
+        padding: 10px;
+        margin-top: 5px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+    }
+    button {
+        background-color: #004aad;
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+    }
+    button:hover {
+        background-color: #00308f;
+    }
+    #map {
+        height: 500px;
+        width: 100%;
+        margin-top: 20px;
+        border-radius: 10px;
+    }
+    .result {
+        margin-top: 20px;
+        font-size: 18px;
+        font-weight: bold;
+        color: #333;
+    }
+</style>
 </head>
 <body>
-<h2>نظام إدارة المركبات - السعودية</h2>
 
-<button id="addVehicleBtn">إضافة مركبة جديدة</button>
+<header>
+    <img src="https://i.ibb.co/SwgRSYjK/logo.png" alt="شعار النظام">
+    <h1>نظام استهلاك الوقود - المملكة العربية السعودية</h1>
+</header>
 
-<table id="dataTable">
-    <thead>
-        <tr>
-            <th>الكود</th>
-            <th>الفرع</th>
-            <th>المركبة</th>
-            <th>نوع المركبة</th>
-            <th>السائق</th>
-            <th>عدد اللترات</th>
-            <th>التكلفة</th>
-            <th>قيمة الكيلومترات</th>
-            <th>نوع الوقود</th>
-            <th>رقم الهيكل</th>
-            <th>رقم المركبة الداخلي</th>
-            <th>المدينة الوجهة</th>
-            <th>المنطقة الوجهة</th>
-            <th>الحي الوجهة</th>
-            <th>المسافة (كم)</th>
-            <th>استهلاك الوقود</th>
-            <th>إجراء</th>
-        </tr>
-    </thead>
-    <tbody></tbody>
-</table>
+<div class="container">
+    <label for="from">من:</label>
+    <select id="from">
+        <option value="">اختر المدينة أو الحي</option>
+    </select>
+
+    <label for="to">إلى:</label>
+    <select id="to">
+        <option value="">اختر المدينة أو الحي</option>
+    </select>
+
+    <label for="vehicle">نوع المركبة:</label>
+    <select id="vehicle">
+        <option value="">اختر نوع المركبة</option>
+        <option value="خصوصي">خصوصي</option>
+        <option value="فان">فان</option>
+        <option value="حافلة">حافلة</option>
+    </select>
+
+    <label for="fuel">نوع الوقود:</label>
+    <select id="fuel">
+        <option value="">اختر نوع الوقود</option>
+        <option value="91">91</option>
+        <option value="95">95</option>
+        <option value="ديزل">ديزل</option>
+    </select>
+
+    <button onclick="calculateFuel()">احسب استهلاك الوقود</button>
+
+    <div class="result" id="result"></div>
+    <div id="map"></div>
+</div>
 
 <script>
-const firebaseConfig = {
-    apiKey: "AIzaSyCWQ2q1HU_LLQKkp2KRlOZ1FdF0bI6jBbM",
-    authDomain: "zahrani-bc3ae.firebaseapp.com",
-    projectId: "zahrani-bc3ae",
-    storageBucket: "zahrani-bc3ae.firebasestorage.app",
-    messagingSenderId: "405206070457",
-    appId: "1:405206070457:web:fedf4204571d910030d768"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+    // قائمة جميع المدن والأحياء السعودية (مثال مبسط، يمكن توسيعها لاحقًا)
+    const locations = [
+        "الرياض","الدرعية","الملز","القصيم","جدة","مكة المكرمة","المدينة المنورة",
+        "الدمام","الهفوف","الطائف","بريدة","خميس مشيط","حائل","تبوك","جيزان","نجران",
+        "عرعر","سكاكا","ينبع","أحياء الرياض","أحياء جدة","أحياء مكة","أحياء الدمام"
+        // يمكن إضافة جميع الأحياء التفصيلية لكل مدينة
+    ];
 
-const saudiLocations = {
-    "الرياض": {"الملز": ["حي الملز 1","حي الملز 2"], "السلام": ["حي السلام 1","حي السلام 2"]},
-    "جدة": {"الحمراء": ["حي الحمراء 1","حي الحمراء 2"], "السلامة": ["حي السلامة 1","حي السلامة 2"]},
-    "الدمام": {"النخيل": ["حي النخيل 1","حي النخيل 2"], "الأمير فهد": ["حي الأمير فهد 1","حي الأمير فهد 2"]}
-};
+    const fromSelect = document.getElementById('from');
+    const toSelect = document.getElementById('to');
 
-const tableBody = document.querySelector('#dataTable tbody');
-const addVehicleBtn = document.getElementById('addVehicleBtn');
+    locations.forEach(loc => {
+        const optionFrom = document.createElement('option');
+        optionFrom.value = loc;
+        optionFrom.textContent = loc;
+        fromSelect.appendChild(optionFrom);
 
-function createRow(vehicle={}){
-    const tr=document.createElement('tr');
-    const fields=["code","branch","vehicle","type","driver","liters","cost","kmValue","fuelType","chassisNo","internalNo"];
-    fields.forEach(key=>{
-        const td=document.createElement('td');
-        td.contentEditable=true;
-        td.innerText=vehicle[key]||'';
-        td.addEventListener('input',saveToFirebase);
-        tr.appendChild(td);
+        const optionTo = document.createElement('option');
+        optionTo.value = loc;
+        optionTo.textContent = loc;
+        toSelect.appendChild(optionTo);
     });
 
-    // Dropdowns الوجهة
-    const cityTd=document.createElement('td');
-    const citySelect=document.createElement('select');
-    citySelect.innerHTML='<option value="">اختر المدينة</option>';
-    Object.keys(saudiLocations).forEach(city=>{const opt=document.createElement('option'); opt.value=city; opt.textContent=city; citySelect.appendChild(opt);});
-    citySelect.value=vehicle.city||'';
-    cityTd.appendChild(citySelect); tr.appendChild(cityTd);
+    let map, directionsService, directionsRenderer;
 
-    const areaTd=document.createElement('td');
-    const areaSelect=document.createElement('select'); areaSelect.innerHTML='<option value="">اختر المنطقة</option>'; areaSelect.value=vehicle.area||''; areaTd.appendChild(areaSelect); tr.appendChild(areaTd);
-
-    const districtTd=document.createElement('td');
-    const districtSelect=document.createElement('select'); districtSelect.innerHTML='<option value="">اختر الحي</option>'; districtSelect.value=vehicle.district||''; districtTd.appendChild(districtSelect); tr.appendChild(districtTd);
-
-    // تحديث المناطق والأحياء عند اختيار المدينة
-    citySelect.addEventListener('change',()=>{
-        areaSelect.innerHTML='<option value="">اختر المنطقة</option>'; districtSelect.innerHTML='<option value="">اختر الحي</option>';
-        const city=citySelect.value;
-        if(city) Object.keys(saudiLocations[city]).forEach(area=>{const opt=document.createElement('option'); opt.value=area; opt.textContent=area; areaSelect.appendChild(opt);});
-        calculateDistanceForRow(tr);
-    });
-    areaSelect.addEventListener('change',()=>{
-        districtSelect.innerHTML='<option value="">اختر الحي</option>';
-        const city=citySelect.value; const area=areaSelect.value;
-        if(city && area) saudiLocations[city][area].forEach(district=>{const opt=document.createElement('option'); opt.value=district; opt.textContent=district; districtSelect.appendChild(opt);});
-        calculateDistanceForRow(tr);
-    });
-    districtSelect.addEventListener('change',()=>{calculateDistanceForRow(tr);});
-
-    // المسافة واستهلاك الوقود
-    const distanceTd=document.createElement('td'); distanceTd.innerText=vehicle.distance||''; tr.appendChild(distanceTd);
-    const consumptionTd=document.createElement('td'); consumptionTd.innerText=vehicle.consumption||''; tr.appendChild(consumptionTd);
-
-    // زر الحذف
-    const actionTd=document.createElement('td');
-    const delBtn=document.createElement('button'); delBtn.innerText='حذف'; delBtn.addEventListener('click',()=>{tr.remove(); saveToFirebase();}); actionTd.appendChild(delBtn); tr.appendChild(actionTd);
-
-    tableBody.appendChild(tr);
-    calculateDistanceForRow(tr);
-}
-
-// زر إضافة مركبة جديدة
-addVehicleBtn.addEventListener('click',()=>{createRow();});
-
-function calculateDistanceForRow(tr){
-    const cells=tr.querySelectorAll('td');
-    const origin=cells[1].innerText;
-    const city=cells[11].querySelector('select').value;
-    const area=cells[12].querySelector('select').value;
-    const district=cells[13].querySelector('select').value;
-    const destination=[city,area,district].filter(x=>x).join(', ');
-    if(!origin || !destination) return;
-    const service=new google.maps.DistanceMatrixService();
-    service.getDistanceMatrix({
-        origins:[origin],
-        destinations:[destination],
-        travelMode:'DRIVING'
-    },(response,status)=>{
-        if(status==='OK'){
-            const distance=response.rows[0].elements[0].distance.value/1000;
-            cells[14].innerText=distance.toFixed(2);
-            const liters=parseFloat(cells[5].innerText.replace(',','.'))||0;
-            if(distance>0 && liters>0) cells[15].innerText=(liters/distance*100).toFixed(2)+' لتر/100كم';
-            saveToFirebase();
-        }
-    });
-}
-
-function saveToFirebase(){
-    const rows=tableBody.querySelectorAll('tr'); const data=[];
-    rows.forEach(tr=>{
-        const cells=tr.querySelectorAll('td');
-        data.push({
-            code: cells[0].innerText,
-            branch: cells[1].innerText,
-            vehicle: cells[2].innerText,
-            type: cells[3].innerText,
-            driver: cells[4].innerText,
-            liters: cells[5].innerText,
-            cost: cells[6].innerText,
-            kmValue: cells[7].innerText,
-            fuelType: cells[8].innerText,
-            chassisNo: cells[9].innerText,
-            internalNo: cells[10].innerText,
-            city: cells[11].querySelector('select').value,
-            area: cells[12].querySelector('select').value,
-            district: cells[13].querySelector('select').value,
-            distance: cells[14].innerText,
-            consumption: cells[15].innerText
+    function initMap() {
+        map = new google.maps.Map(document.getElementById("map"), {
+            center: { lat: 24.7136, lng: 46.6753 }, // الرياض
+            zoom: 5,
         });
-    });
-    db.ref('vehicles').set(data);
-}
+        directionsService = new google.maps.DirectionsService();
+        directionsRenderer = new google.maps.DirectionsRenderer();
+        directionsRenderer.setMap(map);
+    }
 
-// جلب البيانات من Firebase عند التحميل
-db.ref('vehicles').on('value', snapshot => {
-    const data=snapshot.val();
-    tableBody.innerHTML='';
-    if(data) data.forEach(vehicle=>{createRow(vehicle);});
-});
+    function calculateFuel() {
+        const from = document.getElementById('from').value;
+        const to = document.getElementById('to').value;
+        const vehicle = document.getElementById('vehicle').value;
+        const fuel = document.getElementById('fuel').value;
+
+        if (!from || !to || !vehicle || !fuel) {
+            alert("الرجاء اختيار جميع الحقول!");
+            return;
+        }
+
+        const consumptionRate = {
+            "خصوصي": 0.12, // لترات لكل كم
+            "فان": 0.18,
+            "حافلة": 0.25
+        };
+
+        directionsService.route(
+            {
+                origin: from + ", المملكة العربية السعودية",
+                destination: to + ", المملكة العربية السعودية",
+                travelMode: google.maps.TravelMode.DRIVING
+            },
+            function(result, status) {
+                if (status === 'OK') {
+                    directionsRenderer.setDirections(result);
+                    const distanceKm = result.routes[0].legs[0].distance.value / 1000;
+                    const fuelUsed = distanceKm * consumptionRate[vehicle];
+                    document.getElementById('result').innerHTML =
+                        `المسافة: ${distanceKm.toFixed(2)} كم<br>
+                        نوع المركبة: ${vehicle}<br>
+                        نوع الوقود: ${fuel}<br>
+                        استهلاك الوقود: ${fuelUsed.toFixed(2)} لتر`;
+                } else {
+                    alert("حدث خطأ في حساب المسار: " + status);
+                }
+            }
+        );
+    }
 </script>
+
+<script async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCWQ2q1HU_LLQKkp2KRlOZ1FdF0bI6jBbM&callback=initMap&language=ar">
+</script>
+
 </body>
 </html>
